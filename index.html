@@ -1,0 +1,510 @@
+TYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Mathify Ultra - Optimized AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #a855f7;
+            --accent: #f59e0b;
+            --bg-sunny: #fdfcf0;
+        }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: var(--bg-sunny);
+            color: #1e293b;
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        #interactive-mesh {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(99, 102, 241, 0.15) 0%, transparent 50%);
+        }
+
+        .floating-math {
+            position: absolute;
+            font-weight: 800;
+            color: rgba(99, 102, 241, 0.06);
+            pointer-events: none;
+            z-index: -1;
+            animation: float linear infinite;
+        }
+
+        @keyframes float {
+            from { transform: translateY(110vh) rotate(0deg); }
+            to { transform: translateY(-20vh) rotate(360deg); }
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 2.5rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
+        }
+
+        .avatar-container {
+            width: 130px; height: 130px;
+            margin: -80px auto 20px;
+            position: relative;
+            background: white;
+            border-radius: 50%;
+            padding: 10px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+        }
+        .eye { transition: transform 0.1s ease-out; }
+        .hands { 
+            position: absolute; bottom: 20px; width: 100%; 
+            display: flex; justify-content: space-between; padding: 0 18px;
+            opacity: 0; transform: translateY(15px);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .hands.active { opacity: 1; transform: translateY(0); }
+
+        .streak-fire {
+            background: linear-gradient(135deg, #f59e0b, #ef4444);
+            color: white; padding: 6px 16px; border-radius: 100px;
+            font-weight: 900; display: flex; align-items: center; gap: 6px;
+            box-shadow: 0 10px 20px -5px rgba(245, 158, 11, 0.4);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+
+        .bottom-nav {
+            position: fixed; bottom: 25px; left: 20px; right: 20px;
+            height: 80px; background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px); border-radius: 25px;
+            display: flex; justify-content: space-around; align-items: center;
+            z-index: 100; box-shadow: 0 15px 40px rgba(0,0,0,0.12);
+        }
+
+        .nav-btn {
+            display: flex; flex-direction: column; align-items: center;
+            color: #94a3b8; font-size: 0.75rem; font-weight: 800;
+            transition: all 0.3s ease;
+            background: none; border: none; cursor: pointer;
+        }
+        .nav-btn.active { color: var(--primary); transform: translateY(-5px); }
+
+        .yt-logo-btn {
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            cursor: pointer;
+        }
+        .yt-logo-btn:hover {
+            transform: scale(1.15);
+            filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.5));
+        }
+
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+        
+        ::-webkit-scrollbar { width: 0; background: transparent; }
+    </style>
+</head>
+<body>
+    <div id="interactive-mesh"></div>
+    <div id="bg-elements"></div>
+    <div id="app"></div>
+
+    <script>
+        /**
+         * Konfigurasi & Global States
+         */
+        const publicApiKey = "AIzaSyArb8YG29-38gI2lU1TuHroyarKcGdJUtU"; 
+        let db = JSON.parse(localStorage.getItem('mathify_vPublicAI')) || { user: null, streak: 0, xp: 0 };
+        let currentPage = 'login';
+        let quizState = { active: false, pool: [], index: 0, score: 0, answered: false };
+
+        /**
+         * Master Data - Pertanyaan
+         */
+        const MASTER_QUESTIONS = [
+            { diff: 'Mudah', q: 'Berapakah 12 x 5?', options: ['50', '60', '70', '80'], answer: 1 },
+            { diff: 'Mudah', q: 'Jumlah sisi pada kubus adalah...', options: ['4', '6', '8', '12'], answer: 1 },
+            { diff: 'Mudah', q: 'Hasil dari 150 - 75 + 25 adalah...', options: ['50', '100', '125', '75'], answer: 1 },
+            { diff: 'Mudah', q: 'Bentuk desimal dari 1/4 adalah...', options: ['0.25', '0.50', '0.75', '0.10'], answer: 0 },
+            { diff: 'Mudah', q: 'Akar kuadrat dari 144 adalah...', options: ['10', '11', '12', '14'], answer: 2 },
+            { diff: 'Mudah', q: 'Berapa jumlah sudut dalam sebuah segitiga?', options: ['90°', '180°', '270°', '360°'], answer: 1 },
+            { diff: 'Mudah', q: 'Manakah yang merupakan bilangan prima?', options: ['4', '9', '11', '15'], answer: 2 },
+            { diff: 'Sedang', q: 'Jika 2x + 5 = 15, maka x = ...', options: ['2', '5', '10', '20'], answer: 1 },
+            { diff: 'Sedang', q: 'Luas lingkaran dengan jari-jari 7 cm adalah... (π = 22/7)', options: ['44 cm²', '154 cm²', '144 cm²', '49 cm²'], answer: 1 },
+            { diff: 'Sedang', q: 'Median dari data 3, 5, 7, 9, 11 adalah...', options: ['5', '7', '9', '3'], answer: 1 },
+            { diff: 'Sedang', q: 'Hasil dari (-4) x 5 + 10 adalah...', options: ['-10', '30', '10', '-30'], answer: 0 },
+            { diff: 'Sedang', q: 'Faktor Persekutuan Terbesar (FPB) dari 24 dan 36 adalah...', options: ['6', '8', '12', '18'], answer: 2 },
+            { diff: 'Sedang', q: 'Sebuah kotak berisi 3 bola merah dan 2 bola biru. Peluang terambil bola merah adalah...', options: ['1/3', '2/3', '3/5', '2/5'], answer: 2 },
+            { diff: 'Sulit', q: 'Turunan pertama dari f(x) = 2x³?', options: ['6x²', '2x²', '3x²', '6x'], answer: 0 },
+            { diff: 'Sulit', q: 'Jika log 2 = a dan log 3 = b, maka log 6 adalah...', options: ['a - b', 'a + b', 'ab', 'a/b'], answer: 1 },
+            { diff: 'Sulit', q: 'Integral dari 2x dx adalah...', options: ['x² + C', '2x² + C', 'x + C', '2 + C'], answer: 0 },
+            { diff: 'Sulit', q: 'Nilai lim (x→0) sin(x)/x adalah...', options: ['0', '∞', '1', '-1'], answer: 2 },
+            { diff: 'Sulit', q: 'Banyaknya cara menyusun kata "MATH" adalah...', options: ['12', '24', '48', '4'], answer: 1 },
+            { diff: 'Sulit', q: 'Himpunan penyelesaian dari |x - 2| = 3 adalah...', options: ['{5, -1}', '{1, -5}', '{5, 1}', '{-1, -5}'], answer: 0 }
+        ];
+
+        /**
+         * Master Data - Materi
+         */
+        const MASTER_MATERIALS = [
+            { id: 'm1', title: 'Teorema Pythagoras', cat: 'Geometri', content: 'Rumus: a² + b² = c². Digunakan untuk mencari panjang sisi segitiga siku-siku.' },
+            { id: 'm2', title: 'Volume Bangun Ruang', cat: 'Geometri', content: 'Kubus: s³, Balok: p×l×t, Tabung: πr²t, Kerucut: 1/3πr²t, Bola: 4/3πr³.' },
+            { id: 'm3', title: 'Persamaan Linear Satu Variabel', cat: 'Aljabar', content: 'Bentuk umum ax + b = c. Langkah: kumpulkan variabel di satu ruas.' },
+            { id: 'm4', title: 'Statistik Dasar', cat: 'Statistika', content: 'Mean: rata-rata, Median: nilai tengah, Modus: nilai yang sering muncul.' },
+            { id: 'm5', title: 'Pecahan dan Persen', cat: 'Aritmetika', content: 'Mengubah pecahan ke persen: kalikan dengan 100%. Contoh 1/2 = 50%.' },
+            { id: 'm6', title: 'Eksponen (Perpangkatan)', cat: 'Aljabar', content: 'aⁿ × aᵐ = aⁿ⁺ᵐ. Pembagian pangkat: aⁿ / aᵐ = aⁿ⁻ᵐ.' },
+            { id: 'm7', title: 'Logaritma', cat: 'Aljabar', content: 'ᵃlog b = c berarti aᶜ = b. Sifat: log(ab) = log a + log b.' },
+            { id: 'm8', title: 'Turunan (Derivatif)', cat: 'Kalkulus', content: 'f(x) = axⁿ → f\'(x) = anxⁿ⁻¹. Menunjukkan laju perubahan sesaat.' },
+            { id: 'm9', title: 'Integral Dasar', cat: 'Kalkulus', content: 'Kebalikan turunan. ∫ xⁿ dx = (1/n+1)xⁿ⁺¹ + C.' },
+            { id: 'm10', title: 'Trigonometri Dasar', cat: 'Geometri', content: 'Sin = Depan/Miring, Cos = Samping/Miring, Tan = Depan/Samping.' },
+            { id: 'm11', title: 'Matriks', cat: 'Aljabar', content: 'Kumpulan bilangan dalam baris dan kolom. Determinan matriks 2x2: ad - bc.' },
+            { id: 'm12', title: 'Peluang (Probabilitas)', cat: 'Statistika', content: 'P(A) = n(A) / n(S). Nilai peluang berada di antara 0 dan 1.' },
+            { id: 'm13', title: 'Fungsi Kuadrat', cat: 'Aljabar', content: 'Bentuk f(x) = ax² + bx + c. Grafik berupa parabola.' },
+            { id: 'm14', title: 'Barisan dan Deret Aritmetika', cat: 'Aritmetika', content: 'Un = a + (n-1)b. Sn = n/2(a + Un).' },
+            { id: 'm15', title: 'Barisan dan Deret Geometri', cat: 'Aritmetika', content: 'Un = arⁿ⁻¹. Rasio r = Un/Un-1.' },
+            { id: 'm16', title: 'Lingkaran', cat: 'Geometri', content: 'Luas = πr², Keliling = 2πr. π ≈ 3,14 atau 22/7.' },
+            { id: 'm17', title: 'Limit Fungsi', cat: 'Kalkulus', content: 'Nilai pendekatan fungsi saat variabel mendekati titik tertentu.' },
+            { id: 'm18', title: 'Vektor', cat: 'Aljabar', content: 'Besaran yang memiliki nilai dan arah. Penjumlahan vektor: (a,b) + (c,d) = (a+c, b+d).' },
+            { id: 'm19', title: 'Transformasi Geometri', cat: 'Geometri', content: 'Translasi (geser), Refleksi (cermin), Rotasi (putar), Dilatasi (skala).' },
+            { id: 'm20', title: 'Himpunan', cat: 'Logika', content: 'Kumpulan objek yang terdefinisi jelas. Irisan (∩) dan Gabungan (∪).' },
+            { id: 'm21', title: 'Persamaan Garis Lurus', cat: 'Aljabar', content: 'y = mx + c. m adalah gradien atau kemiringan garis.' },
+            { id: 'm22', title: 'Bangun Datar', cat: 'Geometri', content: 'Persegi, Persegi Panjang, Segitiga, Jajar Genjang, Trapesium, Layang-layang.' }
+        ];
+
+        /**
+         * Master Data - Video
+         */
+        const MASTER_VIDEOS = [
+            { id: 'v1', title: 'Trik Cepat Perkalian Jarimatika' },
+            { id: 'v2', title: 'Konsep Dasar Logaritma Mudah' },
+            { id: 'v3', title: 'Cara Cepat Hafal Rumus Pythagoras' },
+            { id: 'v4', title: 'Aljabar Dasar untuk Pemula' },
+            { id: 'v5', title: 'Turunan Fungsi Aljabar Teknik Cepat' },
+            { id: 'v6', title: 'Belajar Integral dari Nol' },
+            { id: 'v7', title: 'Statistika: Mean Median Modus' },
+            { id: 'v8', title: 'Trik Cepat Hitung Persen' },
+            { id: 'v9', title: 'Matematika Menyenangkan: Geometri' },
+            { id: 'v10', title: 'Peluang dan Kejadian Matematika' },
+            { id: 'v11', title: 'Fungsi Kuadrat dan Grafiknya' },
+            { id: 'v12', title: 'Limit Fungsi Aljabar Metode L-Hopital' },
+            { id: 'v13', title: 'Matriks: Perkalian dan Determinan' },
+            { id: 'v14', title: 'Trigonometri: Sudut Istimewa' },
+            { id: 'v15', title: 'Deret Aritmetika vs Geometri' },
+            { id: 'v16', title: 'Himpunan dan Diagram Venn' },
+            { id: 'v17', title: 'Akar Pangkat Dua Tanpa Kalkulator' },
+            { id: 'v18', title: 'Persamaan Kuadrat: Cara Memfaktorkan' },
+            { id: 'v19', title: 'Logika Matematika Dasar' },
+            { id: 'v20', title: 'Bangun Ruang Sisi Lengkung' },
+            { id: 'v21', title: 'Vektor Fisika dan Matematika' },
+            { id: 'v22', title: 'Transformasi Geometri: Rotasi' }
+        ];
+
+        /**
+         * Helpers & Utility Functions
+         */
+        function handleMouseMove(e) {
+            document.body.style.setProperty('--x', e.clientX + 'px');
+            document.body.style.setProperty('--y', e.clientY + 'px');
+        }
+
+        function save(update = true) {
+            localStorage.setItem('mathify_vPublicAI', JSON.stringify(db));
+            if(update) render();
+        }
+
+        async function speak(text) {
+            if (!publicApiKey) return;
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${publicApiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text }] }],
+                        generationConfig: {
+                            responseModalities: ["AUDIO"],
+                            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } }
+                        }
+                    })
+                });
+                const result = await response.json();
+                const audioData = result.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+                if (audioData) {
+                    const blob = pcmToWav(audioData.data, 24000);
+                    const url = URL.createObjectURL(blob);
+                    const audio = new Audio(url);
+                    await audio.play();
+                }
+            } catch (e) {}
+        }
+
+        function pcmToWav(base64, sampleRate) {
+            const binaryString = atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+            const wavHeader = new ArrayBuffer(44);
+            const view = new DataView(wavHeader);
+            view.setUint32(0, 0x52494646, false); 
+            view.setUint32(4, 36 + len, true);
+            view.setUint32(8, 0x57415645, false); 
+            view.setUint12(12, 0x666d7420, false); 
+            view.setUint16(20, 1, true); 
+            view.setUint16(22, 1, true); 
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true); 
+            view.setUint16(32, 2, true); 
+            view.setUint16(34, 16, true); 
+            view.setUint32(36, 0x64617461, false); 
+            view.setUint32(40, len, true);
+            return new Blob([wavHeader, bytes], { type: 'audio/wav' });
+        }
+
+        /**
+         * Rendering Logic
+         */
+        function render() {
+            const app = document.getElementById('app');
+            app.innerHTML = '';
+            if(!db.user) renderLogin(app); else renderShell(app);
+        }
+
+        function renderLogin(app) {
+            app.innerHTML = `
+                <div class="flex items-center justify-center min-h-screen p-6">
+                    <div class="glass-card w-full max-w-md p-10 pt-16 fade-in text-center mt-16 border-t-8 border-indigo-500">
+                        <div class="avatar-container">
+                            <svg class="w-full h-full" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="45" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
+                                <circle class="eye" cx="35" cy="45" r="5" fill="#1e293b"/>
+                                <circle class="eye" cx="65" cy="45" r="5" fill="#1e293b"/>
+                                <path d="M35 70 Q50 85 65 70" fill="none" stroke="#6366f1" stroke-width="3" stroke-linecap="round"/>
+                            </svg>
+                            <div id="hands" class="hands"><div class="w-8 h-8 bg-slate-200 rounded-full border-4 border-white"></div><div class="w-8 h-8 bg-slate-200 rounded-full border-4 border-white"></div></div>
+                        </div>
+                        <h1 class="text-3xl font-black mb-1">Mathify Ultra</h1>
+                        <p class="text-slate-400 text-xs font-black uppercase tracking-widest mb-8">Personal LMS System</p>
+                        <form onsubmit="doLogin(event)" class="space-y-4 text-left">
+                            <input type="text" id="ln" oninput="look(event)" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-400 font-bold" placeholder="Username" required>
+                            <input type="password" onfocus="hE(true)" onblur="hE(false)" class="w-full px-6 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-400 font-bold" placeholder="Password" required>
+                            <button type="submit" class="w-full bg-indigo-500 text-white py-4 rounded-2xl font-black shadow-lg hover:scale-105 transition-transform">MASUK</button>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function look(e) { const eyes = document.querySelectorAll('.eye'); const m = Math.min(e.target.value.length*0.5, 6)-3; eyes.forEach(eye => eye.style.transform = `translateX(${m}px)`); }
+        function hE(h) { const hs = document.getElementById('hands'); const es = document.querySelectorAll('.eye'); if(h){hs.classList.add('active'); es.forEach(e=>e.style.opacity='0');}else{hs.classList.remove('active'); es.forEach(e=>e.style.opacity='1');} }
+
+        function doLogin(e) { 
+            e.preventDefault(); 
+            db.user = document.getElementById('ln').value; 
+            save(); 
+            if(window.confetti) confetti(); 
+            speak(`Selamat datang ${db.user}.`); 
+        }
+
+        function renderShell(app) {
+            app.innerHTML = `
+                <nav class="bottom-nav">
+                    <button onclick="currentPage='home';render()" class="nav-btn ${currentPage==='home'?'active':''}"><i class="fas fa-home"></i><span>Home</span></button>
+                    <button onclick="currentPage='materi';render()" class="nav-btn ${currentPage==='materi'?'active':''}"><i class="fas fa-book"></i><span>Materi</span></button>
+                    <button onclick="currentPage='video';render()" class="nav-btn ${currentPage==='video'?'active':''}"><i class="fas fa-play"></i><span>Video</span></button>
+                    <button onclick="currentPage='ai';render()" class="nav-btn ${currentPage==='ai'?'active':''}"><i class="fas fa-robot"></i><span>AI</span></button>
+                    <button onclick="db.user=null;save()" class="nav-btn text-red-300"><i class="fas fa-power-off"></i><span>Out</span></button>
+                </nav>
+                <main class="max-w-2xl mx-auto p-6 pb-32">
+                    <div id="view" class="fade-in"></div>
+                </main>
+            `;
+            const v = document.getElementById('view');
+            if(quizState.active) renderQuiz(v);
+            else if(currentPage === 'home') renderHome(v);
+            else if(currentPage === 'materi') renderMateri(v);
+            else if(currentPage === 'video') renderVideo(v);
+            else if(currentPage === 'ai') renderAI(v);
+        }
+
+        function renderHome(v) {
+            v.innerHTML = `
+                <div class="flex justify-between items-center mb-8">
+                    <div><h2 class="text-2xl font-black">Halo, ${db.user}!</h2><p class="text-xs font-black text-slate-400 uppercase tracking-tighter">XP: ${db.xp}</p></div>
+                    <div class="streak-fire"><i class="fas fa-fire"></i> ${db.streak}</div>
+                </div>
+                <div class="grid gap-4">
+                    ${['Mudah', 'Sedang', 'Sulit'].map(l => `<div onclick="startQuiz('${l}')" class="glass-card p-6 flex items-center justify-between cursor-pointer hover:bg-white"><div class="flex items-center gap-4"><div class="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 font-black">${l[0]}</div><div><h4 class="font-black">${l}</h4><p class="text-[10px] font-black text-slate-400">TANTANGAN</p></div></div><i class="fas fa-arrow-right text-slate-200"></i></div>`).join('')}
+                </div>
+            `;
+        }
+
+        function startQuiz(difficulty) {
+            quizState.active = true;
+            quizState.pool = MASTER_QUESTIONS.filter(q => q.diff === difficulty).sort(() => Math.random() - 0.5).slice(0, 5);
+            quizState.index = 0;
+            quizState.score = 0;
+            quizState.answered = false;
+            render();
+        }
+
+        function renderQuiz(v) {
+            const q = quizState.pool[quizState.index];
+            v.innerHTML = `
+                <div class="glass-card p-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <span class="text-xs font-black bg-indigo-100 text-indigo-500 px-3 py-1 rounded-full">${quizState.index + 1} / ${quizState.pool.length}</span>
+                        <button onclick="quizState.active=false;render()" class="text-slate-300 hover:text-red-500"><i class="fas fa-times"></i></button>
+                    </div>
+                    <h3 class="text-xl font-black text-slate-800 mb-8">${q.q}</h3>
+                    <div class="grid gap-3">
+                        ${q.options.map((opt, i) => `
+                            <button onclick="checkAnswer(${i})" id="opt-${i}" class="w-full text-left p-4 rounded-2xl border-2 border-slate-100 font-bold hover:border-indigo-300 transition-all flex justify-between items-center">
+                                ${opt}
+                                <span id="icon-${i}"></span>
+                            </button>
+                        `).join('')}
+                    </div>
+                    ${quizState.answered ? `<button onclick="nextQuestion()" class="w-full mt-8 bg-indigo-500 text-white py-4 rounded-2xl font-black shadow-lg">LANJUT</button>` : ''}
+                </div>
+            `;
+        }
+
+        function checkAnswer(i) {
+            if(quizState.answered) return;
+            quizState.answered = true;
+            const correct = quizState.pool[quizState.index].answer;
+            const btn = document.getElementById(`opt-${i}`);
+            const icon = document.getElementById(`icon-${i}`);
+            
+            if(i === correct) {
+                btn.classList.add('bg-green-50', 'border-green-500', 'text-green-700');
+                icon.innerHTML = '<i class="fas fa-check-circle"></i>';
+                quizState.score++;
+                if(window.confetti) confetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } });
+            } else {
+                btn.classList.add('bg-red-50', 'border-red-500', 'text-red-700');
+                icon.innerHTML = '<i class="fas fa-times-circle"></i>';
+                const correctBtn = document.getElementById(`opt-${correct}`);
+                correctBtn.classList.add('bg-green-50', 'border-green-500');
+            }
+            render();
+        }
+
+        function nextQuestion() {
+            quizState.answered = false;
+            quizState.index++;
+            if(quizState.index >= quizState.pool.length) {
+                finishQuiz();
+            } else {
+                render();
+            }
+        }
+
+        function finishQuiz() {
+            quizState.active = false;
+            db.xp += quizState.score * 10;
+            db.streak++;
+            save();
+            speak(`Selesai! Skor kamu ${quizState.score} dari 5.`);
+        }
+
+        function renderMateri(v) {
+            v.innerHTML = `<h2 class="text-2xl font-black mb-6">Materi Belajar</h2><div class="space-y-4">
+                ${MASTER_MATERIALS.map(m => `<details class="glass-card group"><summary class="p-6 cursor-pointer font-black list-none flex justify-between items-center"><span>${m.title} <span class="text-[10px] text-indigo-400 font-normal ml-2">${m.cat}</span></span><i class="fas fa-chevron-down text-xs group-open:rotate-180 transition-transform"></i></summary><div class="px-6 pb-6 pt-2 border-t font-medium text-slate-600 leading-relaxed">${m.content}</div></details>`).join('')}
+            </div>`;
+        }
+
+        function renderVideo(v) {
+            v.innerHTML = `<h2 class="text-2xl font-black mb-6">Video Tutorial</h2><div class="grid gap-4">
+                ${MASTER_VIDEOS.map(vid => `
+                    <div class="glass-card p-6 flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center text-red-500"><i class="fas fa-play text-xl"></i></div>
+                            <div><h4 class="font-bold text-slate-800 leading-tight">${vid.title}</h4></div>
+                        </div>
+                        <a href="https://www.youtube.com/results?search_query=${encodeURIComponent(vid.title + ' matematika')}" target="_blank" class="yt-logo-btn">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z" fill="#FF0000"/><path d="m9.66 15.15 5.72-3.4-5.72-3.4v6.8z" fill="#fff"/></svg>
+                        </a>
+                    </div>`).join('')}
+            </div>`;
+        }
+
+        function renderAI(v) {
+            if(!publicApiKey) {
+                v.innerHTML = `<div class="p-8 text-center glass-card"><i class="fas fa-exclamation-triangle text-amber-500 text-3xl mb-4"></i><p class="font-bold text-slate-600">Admin belum memasukkan API Key.</p></div>`;
+                return;
+            }
+            v.innerHTML = `
+                <div class="flex flex-col h-[60vh]">
+                    <div id="chat" class="flex-1 bg-white/60 rounded-3xl p-5 overflow-y-auto mb-4 border space-y-4 shadow-inner">
+                        <div class="bg-indigo-100 p-4 rounded-2xl rounded-tl-none text-sm font-bold text-indigo-800 max-w-[85%]">Tanyakan soal matematika apa saja!</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <input id="aim" class="flex-1 px-6 py-4 rounded-2xl bg-white border-2 outline-none font-bold text-sm focus:border-indigo-400" placeholder="Ketik soal...">
+                        <button onclick="ask()" class="w-14 h-14 bg-indigo-500 text-white rounded-2xl flex items-center justify-center shadow-lg"><i class="fas fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function ask() {
+            const i = document.getElementById('aim'); const w = document.getElementById('chat'); const q = i.value.trim(); if(!q) return;
+            w.innerHTML += `<div class="flex justify-end"><div class="bg-indigo-500 text-white p-4 rounded-2xl rounded-tr-none text-sm font-bold max-w-[85%]">${q}</div></div>`;
+            i.value = ''; w.scrollTop = w.scrollHeight;
+            const lid = 'l-' + Date.now();
+            w.innerHTML += `<div id="${lid}" class="flex justify-start"><div class="bg-white p-4 rounded-2xl rounded-tl-none text-sm font-bold text-slate-400 animate-pulse">Berpikir...</div></div>`;
+            
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${publicApiKey}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        contents: [{ parts: [{ text: q }] }], 
+                        systemInstruction: { 
+                            parts: [{ text: "Jawab soal matematika secara singkat, jelas, dan akurat dalam Bahasa Indonesia." }] 
+                        } 
+                    })
+                });
+                const d = await res.json();
+                document.getElementById(lid).remove();
+                let a = d.candidates?.[0]?.content?.parts?.[0]?.text || "Maaf, silakan coba lagi.";
+                w.innerHTML += `<div class="flex justify-start fade-in"><div class="bg-white p-4 rounded-2xl rounded-tl-none text-sm font-bold text-slate-700 max-w-[85%] border shadow-sm whitespace-pre-wrap">${a}</div></div>`;
+                w.scrollTop = w.scrollHeight;
+                speak(a.substring(0, 150)); 
+            } catch(e) { 
+                if(document.getElementById(lid)) document.getElementById(lid).innerHTML = `<div class="text-red-500 p-4 font-bold">Terjadi kendala koneksi AI.</div>`;
+            }
+        }
+
+        function initBG() {
+            const bg = document.getElementById('bg-elements'); bg.innerHTML = '';
+            ['π', '√', 'Σ', '∫'].forEach((sym) => {
+                for(let j=0; j<3; j++) {
+                    const el = document.createElement('div'); el.className = 'floating-math'; el.innerText = sym;
+                    el.style.left = Math.random()*90+'vw'; el.style.top = Math.random()*100+'vh';
+                    el.style.animationDuration = (10+Math.random()*15)+'s';
+                    bg.appendChild(el);
+                }
+            });
+        }
+
+        /**
+         * Event Listeners - FIXED
+         */
+        window.onload = () => { 
+            initBG(); 
+            render(); 
+            // Tambahkan event listener mouse secara dinamis untuk menghindari ReferenceError
+            document.addEventListener('mousemove', handleMouseMove);
+        };
+    </script>
+</body>
+</html>
